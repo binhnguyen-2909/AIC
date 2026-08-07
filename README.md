@@ -133,6 +133,19 @@ may internally reduce worker count to one for timestamp correctness; `--workers`
 is therefore a request, not a guarantee. Do not commit their generated JSONL
 indexes.
 
+For a multi-GPU or multi-process run, split the sorted video list into
+disjoint shards and write one output per worker:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python solution/asr_index.py build \
+  --out solution/ensemble_index/asr_shard_0.jsonl \
+  --shard-index 0 --num-shards 8 --batch-size 64 --num-beams 1 \
+  --skip-file solution/ensemble_index/asr_index.jsonl
+```
+
+Run the other shard indices concurrently, then merge atomically with
+`solution/merge_indices.py` and validate against the media-info directory.
+
 ## Project notes
 
 - `docs/RESEARCH_REPORT.md`: papers, official-data audit, benchmarks, and

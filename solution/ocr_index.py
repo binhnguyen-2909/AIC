@@ -56,15 +56,21 @@ def build(args):
     reader = easyocr.Reader(["vi", "en"], gpu=args.device.startswith("cuda"),
                             verbose=False)
     ids = [args.video] if args.video else all_video_ids()
+    if args.num_shards < 1 or not 0 <= args.shard_index < args.num_shards:
+        raise SystemExit("require 0 <= --shard-index < --num-shards and --num-shards >= 1")
+    ids = ids[args.shard_index::args.num_shards]
     if args.limit:
         ids = ids[:args.limit]
     out = Path(args.out)
     done = set()
-    if out.exists() and not args.overwrite:
-        with out.open() as f:
-            for line in f:
-                if line.strip():
-                    done.add(json.loads(line)["video_id"])
+    done_paths = [] if args.overwrite else [out]
+    done_paths.extend(Path(p) for p in args.skip_file)
+    for done_path in done_paths:
+        if done_path.exists():
+            with done_path.open() as f:
+                for line in f:
+                    if line.strip():
+                        done.add(json.loads(line)["video_id"])
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w" if args.overwrite else "a") as f:
         for i, vid in enumerate(ids, 1):
@@ -161,8 +167,14 @@ def main():
     b.add_argument("--workers", type=int, default=0,
                    help="EasyOCR recognition workers")
     b.add_argument("--video")
+    b.add_argument("--shard-index", type=int, default=0,
+                   help="run this zero-based shard of the sorted video list")
+    b.add_argument("--num-shards", type=int, default=1,
+                   help="number of disjoint shards used for parallel runs")
     b.add_argument("--min-conf", type=float, default=0.25)
     b.add_argument("--overwrite", action="store_true")
+    b.add_argument("--skip-file", action="append", default=[],
+                   help="additional JSONL file whose video_ids are already done")
     b.set_defaults(func=build)
     s = sub.add_parser("search")
     s.add_argument("--index", required=True)

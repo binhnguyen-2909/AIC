@@ -44,31 +44,55 @@ def load_audio(path: Path) -> np.ndarray:
 
 
 def transcribe(video_id: str, asr, batch_size: int = 8,
-               workers: int = 0, timestamp_mode: str = "word") -> dict:
+               workers: int = 0, timestamp_mode: str = "word",
+               num_beams: int = 1) -> dict:
     path = video_path(video_id)
     if path is None:
         raise FileNotFoundError(video_id)
     audio = load_audio(path)
     # Pass sampling_rate as part of the audio input object; otherwise recent
     # Transformers versions forward it as an unsupported generate kwarg.
+    generate_kwargs = {"language": "vi", "task": "transcribe"}
+    if num_beams > 0:
+        generate_kwargs["num_beams"] = int(num_beams)
     result = asr(
         {"raw": audio, "sampling_rate": 16000},
         num_workers=workers,
         batch_size=batch_size,
         return_timestamps=("word" if timestamp_mode == "word" else True),
-        generate_kwargs={"language": "vi", "task": "transcribe"},
+        generate_kwargs=generate_kwargs,
     )
-    words = []
-    for chunk in result.get("chunks", []):
+    raw_chunks = result.get("chunks", [])
+    if not raw_chunks and result.get("text"):
+        raw_chunks = [{"text": result["text"], "timestamp": (None, None)}]
+
+    # Recent Transformers/Whisper combinations can return useful text but
+    # incomplete timestamps (e.g. ``(0.0, None)``) for long AAC streams.
+    # Keep the ASR signal usable by assigning missing spans proportionally to
+    # text length over the decoded audio duration.  This is an approximation,
+    # but is strictly better than mapping every hit to frame 0 and remains
+    # explicit in the output metadata.
+    parsed = []
+    for chunk in raw_chunks:
         ts = chunk.get("timestamp") or (None, None)
         text = re.sub(r"\s+", " ", str(chunk.get("text", ""))).strip()
         if not text:
             continue
-        words.append({
+        parsed.append({
+            "text": text,
             "start": None if ts[0] is None else float(ts[0]),
             "end": None if ts[1] is None else float(ts[1]),
-            "text": text,
         })
+    if parsed and any(x["start"] is None or x["end"] is None for x in parsed):
+        duration = len(audio) / 16000.0
+        weights = np.asarray([max(1, len(x["text"])) for x in parsed], dtype=np.float64)
+        total = float(weights.sum()) or 1.0
+        cursor = 0.0
+        for x, weight in zip(parsed, weights):
+            span = duration * float(weight) / total
+            x["start"], x["end"] = cursor, min(duration, cursor + span)
+            cursor += span
+    words = parsed
     # Word timestamps are useful for mapping back to frames, but individual
     # words are poor BM25 documents.  Build short overlapping-search units and
     # collapse pathological consecutive repetitions common in music/noisy
@@ -113,13 +137,19 @@ def build(args):
     )
     out = Path(args.out)
     done = {}
-    if out.exists() and not args.overwrite:
-        with out.open() as f:
-            for line in f:
-                if line.strip():
-                    row = json.loads(line)
-                    done[row["video_id"]] = row
+    done_paths = [] if args.overwrite else [out]
+    done_paths.extend(Path(p) for p in args.skip_file)
+    for done_path in done_paths:
+        if done_path.exists():
+            with done_path.open() as f:
+                for line in f:
+                    if line.strip():
+                        row = json.loads(line)
+                        done[row["video_id"]] = row
     ids = [args.video] if args.video else all_video_ids()
+    if args.num_shards < 1 or not 0 <= args.shard_index < args.num_shards:
+        raise SystemExit("require 0 <= --shard-index < --num-shards and --num-shards >= 1")
+    ids = ids[args.shard_index::args.num_shards]
     if args.limit:
         ids = ids[:args.limit]
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -131,7 +161,8 @@ def build(args):
             try:
                 row = transcribe(vid, asr, batch_size=args.batch_size,
                                  workers=args.workers,
-                                 timestamp_mode=args.timestamp_mode)
+                                 timestamp_mode=args.timestamp_mode,
+                                 num_beams=args.num_beams)
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 f.flush()
                 print(f"[{i}/{len(ids)}] {vid}: {len(row['chunks'])} chunks", flush=True)
@@ -203,9 +234,17 @@ def main():
                    help="pipeline preprocessing workers (8 needs a free server)")
     b.add_argument("--timestamp-mode", choices=("word", "chunk"), default="word",
                    help="word timestamps are precise; chunk timestamps are faster")
+    b.add_argument("--num-beams", type=int, default=1,
+                   help="Whisper beam width; 1=greedy and much faster")
     b.add_argument("--limit", type=int)
     b.add_argument("--video")
+    b.add_argument("--shard-index", type=int, default=0,
+                   help="run this zero-based shard of the sorted video list")
+    b.add_argument("--num-shards", type=int, default=1,
+                   help="number of disjoint shards used for parallel runs")
     b.add_argument("--overwrite", action="store_true")
+    b.add_argument("--skip-file", action="append", default=[],
+                   help="additional JSONL file whose video_ids are already done")
     b.set_defaults(func=build)
     s = sub.add_parser("search")
     s.add_argument("--index", required=True)
