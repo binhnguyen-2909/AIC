@@ -55,16 +55,44 @@ def transcribe(video_id: str, asr, batch_size: int = 8,
     generate_kwargs = {"language": "vi", "task": "transcribe"}
     if num_beams > 0:
         generate_kwargs["num_beams"] = int(num_beams)
-    result = asr(
-        {"raw": audio, "sampling_rate": 16000},
-        num_workers=workers,
-        batch_size=batch_size,
-        return_timestamps=("word" if timestamp_mode == "word" else True),
-        generate_kwargs=generate_kwargs,
-    )
-    raw_chunks = result.get("chunks", [])
-    if not raw_chunks and result.get("text"):
-        raw_chunks = [{"text": result["text"], "timestamp": (None, None)}]
+    if timestamp_mode == "chunk":
+        # Avoid Whisper's long-form timestamp decoder.  It is very slow on
+        # long AAC videos and can return null timestamps in recent
+        # Transformers.  Fixed 30-second inputs batch cleanly and provide a
+        # stable, useful time span for retrieval.
+        step = 30 * 16000
+        inputs = [
+            {"raw": audio[start:start + step], "sampling_rate": 16000}
+            for start in range(0, len(audio), step)
+        ]
+        results = asr(
+            inputs, num_workers=workers, batch_size=batch_size,
+            return_timestamps=False, generate_kwargs=generate_kwargs,
+        )
+        if isinstance(results, dict):
+            results = [results]
+        duration = len(audio) / 16000.0
+        parsed = []
+        for i, item in enumerate(results):
+            text = re.sub(r"\s+", " ", str(item.get("text", ""))).strip()
+            if text:
+                parsed.append({
+                    "text": text,
+                    "start": min(duration, i * 30.0),
+                    "end": min(duration, (i + 1) * 30.0),
+                })
+        words = parsed
+    else:
+        result = asr(
+            {"raw": audio, "sampling_rate": 16000},
+            num_workers=workers,
+            batch_size=batch_size,
+            return_timestamps="word",
+            generate_kwargs=generate_kwargs,
+        )
+        raw_chunks = result.get("chunks", [])
+        if not raw_chunks and result.get("text"):
+            raw_chunks = [{"text": result["text"], "timestamp": (None, None)}]
 
     # Recent Transformers/Whisper combinations can return useful text but
     # incomplete timestamps (e.g. ``(0.0, None)``) for long AAC streams.
@@ -72,27 +100,27 @@ def transcribe(video_id: str, asr, batch_size: int = 8,
     # text length over the decoded audio duration.  This is an approximation,
     # but is strictly better than mapping every hit to frame 0 and remains
     # explicit in the output metadata.
-    parsed = []
-    for chunk in raw_chunks:
-        ts = chunk.get("timestamp") or (None, None)
-        text = re.sub(r"\s+", " ", str(chunk.get("text", ""))).strip()
-        if not text:
-            continue
-        parsed.append({
-            "text": text,
-            "start": None if ts[0] is None else float(ts[0]),
-            "end": None if ts[1] is None else float(ts[1]),
-        })
-    if parsed and any(x["start"] is None or x["end"] is None for x in parsed):
-        duration = len(audio) / 16000.0
-        weights = np.asarray([max(1, len(x["text"])) for x in parsed], dtype=np.float64)
-        total = float(weights.sum()) or 1.0
-        cursor = 0.0
-        for x, weight in zip(parsed, weights):
-            span = duration * float(weight) / total
-            x["start"], x["end"] = cursor, min(duration, cursor + span)
-            cursor += span
-    words = parsed
+        parsed = []
+        for chunk in raw_chunks:
+            ts = chunk.get("timestamp") or (None, None)
+            text = re.sub(r"\s+", " ", str(chunk.get("text", ""))).strip()
+            if not text:
+                continue
+            parsed.append({
+                "text": text,
+                "start": None if ts[0] is None else float(ts[0]),
+                "end": None if ts[1] is None else float(ts[1]),
+            })
+        if parsed and any(x["start"] is None or x["end"] is None for x in parsed):
+            duration = len(audio) / 16000.0
+            weights = np.asarray([max(1, len(x["text"])) for x in parsed], dtype=np.float64)
+            total = float(weights.sum()) or 1.0
+            cursor = 0.0
+            for x, weight in zip(parsed, weights):
+                span = duration * float(weight) / total
+                x["start"], x["end"] = cursor, min(duration, cursor + span)
+                cursor += span
+        words = parsed
     # Word timestamps are useful for mapping back to frames, but individual
     # words are poor BM25 documents.  Build short overlapping-search units and
     # collapse pathological consecutive repetitions common in music/noisy
