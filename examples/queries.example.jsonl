@@ -1,0 +1,3 @@
+{"query_id": "example-kis", "query_type": "KIS", "query_text": "một diễn giả mặc áo đỏ phát biểu"}
+{"query_id": "example-qa", "query_type": "QA", "query_text": "một người đang cầm micro", "question": "Người đó đang cầm vật gì?"}
+{"query_id": "example-trake", "query_type": "TRAKE", "query_text": "một vận động viên nhảy cao", "events": [{"text": "chạy đà"}, {"text": "giậm nhảy"}, {"text": "vượt xà"}, {"text": "tiếp đất"}]}

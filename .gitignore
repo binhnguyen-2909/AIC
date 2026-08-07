@@ -1,0 +1,38 @@
+# Competition data and generated artifacts
+extracted/
+input/
+data/
+solution/index/
+solution/ensemble_index/
+experiments/*/artifacts/
+experiments/*/artifacts_full/
+*.zip
+*.mp4
+*.avi
+*.mov
+*.jpg
+*.jpeg
+*.png
+*.npy
+*.npz
+*.faiss
+*.pkl
+*.pt
+*.pth
+*.safetensors
+*.jsonl
+!examples/*.jsonl
+
+# Local model/cache and runtime files
+.cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+.env
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

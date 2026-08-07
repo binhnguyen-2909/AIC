@@ -1,0 +1,15 @@
+numpy
+faiss-cpu
+torch
+transformers
+Pillow
+opencv-python-headless
+rank-bm25
+pyvi
+soundfile
+librosa
+
+# Optional channels/models:
+# faster-whisper
+# easyocr
+# qwen-vl-utils
