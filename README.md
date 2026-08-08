@@ -22,9 +22,10 @@ Vietnamese query
 
 The implementation is in [`solution/submission_ens.py`](solution/submission_ens.py).
 It supports KIS, QA, and TRAKE JSONL queries and emits the official ranked
-JSONL shape. SigLIP2, ASR, and OCR are optional channels; they are kept
-separate because the available proxy validation did not show that enabling
-them improves the BM25-led baseline.
+JSONL shape. SigLIP2, ASR, and OCR are optional channels. When locally built
+full-corpus `ensemble_index/asr_full.jsonl` or `ocr_full.jsonl` artifacts are
+present, the ensemble loads them automatically; otherwise it falls back to
+the legacy filenames and remains dataset-free.
 
 There is no public AIC 2026 query/ground-truth/scorer bundle in this checkout,
 so an official claim of `>90%` cannot be verified locally. The proxy numbers

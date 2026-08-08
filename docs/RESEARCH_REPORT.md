@@ -82,25 +82,26 @@ encoder chưa có benchmark tiếng Việt để suy diễn accuracy.
 873 MP4 đều có audio AAC nhưng workspace không có subtitle/transcript/OCR/caption
 artifact. Đã thêm [asr_index.py](./asr_index.py): PhoWhisper đọc audio qua
 ffmpeg, lưu đoạn có timestamp, gom thành cửa sổ khoảng 15 giây, rồi search
-BM25 và ánh xạ timestamp về `frame_idx` qua CSV. `EnsembleRetriever` chỉ nạp
-nhánh này khi có `ensemble_index/asr_index.jsonl`, nên không làm thay đổi
-production nếu chưa chạy ASR toàn corpus.
+BM25 và ánh xạ timestamp về `frame_idx` qua CSV. `EnsembleRetriever` ưu tiên
+`ensemble_index/asr_full.jsonl` và fallback về `asr_index.jsonl` cho checkout cũ.
 
-Đã khởi chạy full ASR với PhoWhisper-tiny và cơ chế resume theo `video_id`.
-Batch1024 đã được thử thực tế nhưng máy đang có job khác giữ khoảng 34--49 GB
-mỗi GPU: GPU1 tăng lên khoảng 79/80 GB trước video đầu tiên, nên dừng trước
-OOM; cấu hình an toàn batch64 đang tiếp tục. Với long-form
+Đã hoàn tất ASR full corpus với PhoWhisper-tiny: 873/873 video, 16,057 chunks,
+không còn timestamp null trong artifact merged. Batch1024 đã được thử thực tế
+nhưng máy đang có job khác giữ khoảng 34--49 GB mỗi GPU: GPU1 tăng lên khoảng
+79/80 GB trước video đầu tiên, nên dừng trước OOM; cấu hình an toàn batch64 đã
+được dùng cho các shard còn lại. Với long-form
 `ChunkPipeline`, Transformers tự giới hạn `num_workers` về 1 để tránh lỗi dù
 được truyền `--workers 8`; đây là giới hạn của pipeline, không phải bỏ sót
 tham số.
 
-OCR full-corpus cũng đã khởi chạy với EasyOCR; đã ghi an toàn 2/873 video
-trước khi phải dừng vì hai GPU chỉ còn khoảng 1--2 GB trống. `ensemble.py`
-kiểm tra đủ 873 `video_id` trước khi nạp ASR/OCR, nên các artefact partial này
-không thể làm bẩn kết quả production.
+OCR full corpus cũng đã hoàn tất với EasyOCR: 873/873 video và 52,930 text
+frames trong artifact merged; 871 video có ít nhất một text frame, 2 video
+không phát hiện chữ. Các shard full-frame được giữ cho phần đã hoàn tất, còn
+phần còn lại dùng tối đa 16 keyframe/video để phủ đủ video trong giới hạn
+VRAM. `EnsembleRetriever` ưu tiên `ensemble_index/ocr_full.jsonl` và fallback
+về `ocr_index.jsonl`; các JSONL runtime này không được commit lên GitHub.
 Đã tối ưu script sang `readtext_batched()` và kiểm tra runtime trên 2 ảnh
-(`ocr_batched=PASS`) để lần resume tiếp theo không còn detector tuần tự từng
-ảnh.
+(`ocr_batched=PASS`) để tránh detector tuần tự từng ảnh.
 
 Smoke test trên một video có lời thoại cho transcript tiếng Việt có nội dung
 đúng về trạm cứu hộ mèo và địa danh; clip nhạc gây lặp với checkpoint tiny.
