@@ -224,7 +224,11 @@ class EnsembleRetriever:
         self.ocr_bm25 = None
         self.ocr_owners = []
         self._ocr_frame_hits = {}
-        ocr_path = ENS_DIR / "ocr_index.jsonl"
+        # Prefer the merged full-corpus OCR index; keep the legacy filename
+        # as a fallback for older dataset-free deployments.
+        ocr_path = ENS_DIR / "ocr_full.jsonl"
+        if not ocr_path.exists():
+            ocr_path = ENS_DIR / "ocr_index.jsonl"
         if ocr_path.exists():
             try:
                 ocr_rows = [json.loads(line) for line in ocr_path.open()
