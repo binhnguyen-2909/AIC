@@ -96,9 +96,10 @@ tham số.
 
 OCR full corpus cũng đã hoàn tất với EasyOCR: 873/873 video và 52,930 text
 frames trong artifact merged; 871 video có ít nhất một text frame, 2 video
-không phát hiện chữ. Các shard full-frame được giữ cho phần đã hoàn tất, còn
-phần còn lại dùng tối đa 16 keyframe/video để phủ đủ video trong giới hạn
-VRAM. `EnsembleRetriever` ưu tiên `ensemble_index/ocr_full.jsonl` và fallback
+không phát hiện chữ. Các shard full-frame được giữ cho phần đã hoàn tất; các
+shard resume dùng sample16, với một phần nhỏ đã chạy sample64 trước khi tối
+ưu lịch GPU để phủ đủ video trong giới hạn VRAM. `EnsembleRetriever` ưu tiên
+`ensemble_index/ocr_full.jsonl` và fallback
 về `ocr_index.jsonl`; các JSONL runtime này không được commit lên GitHub.
 Đã tối ưu script sang `readtext_batched()` và kiểm tra runtime trên 2 ảnh
 (`ocr_batched=PASS`) để tránh detector tuần tự từng ảnh.
