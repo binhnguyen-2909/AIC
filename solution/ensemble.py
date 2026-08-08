@@ -195,7 +195,11 @@ class EnsembleRetriever:
         self.asr_owners = []
         self._asr_frame_hits = {}
         self._map_cache = {}
-        asr_path = ENS_DIR / "asr_index.jsonl"
+        # Prefer the atomically merged full-corpus index; keep the legacy
+        # filename as a fallback for older dataset-free deployments.
+        asr_path = ENS_DIR / "asr_full.jsonl"
+        if not asr_path.exists():
+            asr_path = ENS_DIR / "asr_index.jsonl"
         if asr_path.exists():
             try:
                 asr_rows = [json.loads(line) for line in asr_path.open()
