@@ -48,6 +48,36 @@ class VLMAnswerer:
         gen = out[0][inputs.input_ids.shape[1]:]
         ans = self.processor.decode(gen, skip_special_tokens=True).strip()
         return ans
+    
+    @torch.no_grad()
+    def answer_multi(self, image_paths, question, max_new_tokens=64):
+        """Processes multiple chronological frames as a single video sequence."""
+        # Open and filter valid images
+        images = [Image.open(p).convert("RGB") for p in image_paths if p is not None]
+        
+        if not images:
+            return ""
+
+        # Build the multi-image content payload
+        content = []
+        for img in images:
+            content.append({"type": "image", "image": img})
+            
+        # Add context to the prompt telling the model these are sequential frames
+        content.append({
+            "type": "text", 
+            "text": f"Những hình ảnh này là các khung hình liên tiếp từ một video. Trả lời ngắn gọn dựa trên toàn bộ chuỗi hình ảnh: {question}"
+        })
+
+        messages = [{"role": "user", "content": content}]
+        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        
+        inputs = self.processor(text=[text], images=images, return_tensors="pt").to(self.device)
+        out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        
+        gen = out[0][inputs.input_ids.shape[1]:]
+        ans = self.processor.decode(gen, skip_special_tokens=True).strip()
+        return ans
 
 
 def keyframe_path(video_id, frame_idx):

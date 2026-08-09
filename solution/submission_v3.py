@@ -263,15 +263,27 @@ def main():
                 question = q.get("question", text)
                 results = retriever.search(text, top_k=20, templates=templates)
                 answer = ""
+                
                 if vlm is not None and results:
-                    top_vid, top_fi = results[0]
-                    img_path = keyframe_path(top_vid, top_fi)
-                    if img_path:
-                        try:
-                            answer = vlm.answer(str(img_path), question)
-                        except Exception as e:
-                            print(f"[qa] VLM err {qid}: {e}")
-                            answer = ""
+                    # 1. Identify the best matching video ID
+                    top_vid = results[0][0]
+                    
+                    # 2. Extract all retrieved frame indices for THIS specific video
+                    vid_frames = [f for v, f in results if v == top_vid]
+                    
+                    # 3. Sort chronologically and limit to 4-8 frames to prevent memory overflow
+                    vid_frames = sorted(vid_frames)[:6] 
+                    
+                    # 4. Resolve the file paths using your existing keyframe_path function
+                    img_paths = [keyframe_path(top_vid, f) for f in vid_frames]
+                    
+                    try:
+                        # 5. Pass the chronological sequence to the VLM
+                        answer = vlm.answer_multi(img_paths, question)
+                    except Exception as e:
+                        print(f"[qa] VLM err {qid}: {e}")
+                        answer = ""
+                        
                 # Never copy a reference answer from the query fixture.  If
                 # the optional VLM is unavailable, emit an empty answer so
                 # blind QA runs remain honest rather than leaking GT.
