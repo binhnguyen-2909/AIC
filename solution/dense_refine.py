@@ -86,3 +86,43 @@ class DenseFrameRefiner:
         scores = (image_emb.float() @ text_embedding.reshape(-1)).cpu().numpy()
         order = np.argsort(-scores)[:max(1, int(top_k))]
         return [(int(frame_ids[int(i)]), float(scores[int(i)])) for i in order]
+    
+def get_contiguous_keyframes(video_id: str, center_frame: int, window: int = 2):
+    """Retrieves paths for the center keyframe and its adjacent temporal neighbors."""
+    map_csv = ROOT / "extracted" / "map-keyframes-aic25-b1" / "map-keyframes" / f"{video_id}.csv"
+    if not map_csv.exists():
+        return []
+    
+    # Read the mapping: n (ordinal) -> frame_idx
+    rows = []
+    with open(map_csv) as f:
+        next(f)
+        for line in f:
+            parts = line.strip().split(",")
+            if len(parts) >= 4:
+                rows.append((int(parts[0]), int(parts[3]))) 
+                
+    if not rows:
+        return []
+        
+    # Find the row index of the closest keyframe to our center_frame
+    best_idx = min(range(len(rows)), key=lambda i: abs(rows[i][1] - center_frame))
+    
+    start_idx = max(0, best_idx - window)
+    end_idx = min(len(rows), best_idx + window + 1)
+    
+    # We must import keyframe_path locally to avoid circular imports
+    try:
+        from qa_vlm import keyframe_path
+    except ImportError:
+        from solution.qa_vlm import keyframe_path
+        
+    sequence_paths = []
+    # Reconstruct the original frame_idx for each neighbor and resolve its path
+    for i in range(start_idx, end_idx):
+        neighbor_frame_idx = rows[i][1]
+        path = keyframe_path(video_id, neighbor_frame_idx)
+        if path:
+            sequence_paths.append(path)
+            
+    return sequence_paths

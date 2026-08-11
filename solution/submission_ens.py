@@ -184,23 +184,53 @@ def main():
 
             elif qt == "QA":
                 lines = []
+                
+                # We only need to answer once using the very best video's temporal context
+                answered = False
+                final_answer = ""
+                
+                # Import the new sequence extractor
+                try:
+                    from dense_refine import get_contiguous_keyframes
+                except ImportError:
+                    from solution.dense_refine import get_contiguous_keyframes
+                
                 for row_idx, (v, f, _score) in enumerate(results):
                     answer = ""
-                    if vlm is not None and row_idx < args.qa_frames and keyframe_path:
-                        img_path = keyframe_path(v, f)
-                        if img_path:
+                    
+                    if vlm is not None and row_idx == 0: # Only generate answer for the top-1 candidate
+                        # Get a 5-frame sequence around the best frame (center - 2, center + 2)
+                        sequence_paths = get_contiguous_keyframes(v, f, window=2)
+                        
+                        if sequence_paths:
                             prompt = (
                                 f"Sự kiện cần tìm: {text}\n"
                                 f"Câu hỏi: {question}\n"
-                                "Chỉ trả lời ngắn gọn dựa trên hình ảnh này."
                             )
                             try:
-                                answer = vlm.answer(str(img_path), prompt).strip()
+                                final_answer = vlm.answer_multi(sequence_paths, prompt).strip()
+                                answered = True
                             except Exception as e:
-                                print(f"[qa] VLM err {qid} rank={row_idx + 1}: {e}")
-                    if not answer and args.allow_given_answer:
-                        answer = q.get("answer", "")
-                    lines.append(f"{v}, {f}, {answer}")
+                                print(f"[qa] VLM err {qid} sequence: {e}")
+                                
+                        # Fallback to single frame if sequence extraction failed
+                        if not answered and keyframe_path:
+                            img_path = keyframe_path(v, f)
+                            if img_path:
+                                prompt = (
+                                    f"Sự kiện cần tìm: {text}\n"
+                                    f"Câu hỏi: {question}\n"
+                                    "Chỉ trả lời ngắn gọn dựa trên hình ảnh này."
+                                )
+                                try:
+                                    final_answer = vlm.answer(str(img_path), prompt).strip()
+                                except Exception as e:
+                                    print(f"[qa] VLM err {qid} single-frame: {e}")
+
+                    if not final_answer and args.allow_given_answer:
+                        final_answer = q.get("answer", "")
+                        
+                    lines.append(f"{v}, {f}, {final_answer}")
 
             elif qt == "TRAKE":
                 events = q.get("events", [])
