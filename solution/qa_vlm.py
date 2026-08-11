@@ -21,9 +21,12 @@ KEYFRAMES_BASE = ROOT / "extracted"
 
 class VLMAnswerer:
     def __init__(self, device="cuda"):
-        print("[vlm] loading Qwen2.5-VL-3B-Instruct...")
+        print("[vlm] loading Qwen2.5-VL-3B-Instruct for multi-frame...")
         self.processor = AutoProcessor.from_pretrained(
             "Qwen/Qwen2.5-VL-3B-Instruct",
+            # Cap resolution to prevent OOM when passing sequences
+            min_pixels=256 * 28 * 28,  
+            max_pixels=1280 * 28 * 28, 
         )
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2.5-VL-3B-Instruct",
@@ -34,6 +37,7 @@ class VLMAnswerer:
 
     @torch.no_grad()
     def answer(self, image_path, question, max_new_tokens=64):
+        # Keep original single-image method for backwards compatibility
         img = Image.open(image_path).convert("RGB")
         messages = [{
             "role": "user",
@@ -48,22 +52,18 @@ class VLMAnswerer:
         gen = out[0][inputs.input_ids.shape[1]:]
         ans = self.processor.decode(gen, skip_special_tokens=True).strip()
         return ans
-    
+        
     @torch.no_grad()
     def answer_multi(self, image_paths, question, max_new_tokens=64):
         """Processes multiple chronological frames as a single video sequence."""
-        # Open and filter valid images
         images = [Image.open(p).convert("RGB") for p in image_paths if p is not None]
-        
         if not images:
             return ""
 
-        # Build the multi-image content payload
         content = []
         for img in images:
             content.append({"type": "image", "image": img})
             
-        # Add context to the prompt telling the model these are sequential frames
         content.append({
             "type": "text", 
             "text": f"Những hình ảnh này là các khung hình liên tiếp từ một video. Trả lời ngắn gọn dựa trên toàn bộ chuỗi hình ảnh: {question}"
