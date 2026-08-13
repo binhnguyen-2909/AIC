@@ -88,6 +88,10 @@ python solution/submission_ens.py \
   --use-ensemble --translate --use-vlm
 ```
 
+Production QA refuses to publish blank answers. Use `--allow-blank-qa` only
+for an explicit smoke/diagnostic run. Exact duplicate candidates are removed
+before ranks are written.
+
 Use `--device cpu` only for smoke tests. On a shared GPU, leave SigLIP2
 disabled unless it has been benchmarked on the target query distribution.
 
@@ -127,6 +131,13 @@ elsewhere:
 ```bash
 export AIC_ROOT=/path/to/checkout
 export AIC_SOLUTION_ROOT=/path/to/checkout/solution
+```
+
+For safe parallel processing and the 2 GiB VRAM reserve policy, see
+[`docs/GPU_BUDGET.md`](docs/GPU_BUDGET.md) and run the read-only calculator:
+
+```bash
+python solution/gpu_budget.py --per-worker-gib 6 --reserve-gib 2
 ```
 
 The ASR/OCR builders are resumable and optional. Long-form Whisper pipelines

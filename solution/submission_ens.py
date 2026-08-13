@@ -28,6 +28,32 @@ def _normalize_result(item):
     return str(video), int(frame), float(score)
 
 
+def _dedupe_lines(lines, top_k):
+    """Keep first exact candidate and never spend rank slots on duplicates."""
+    out = []
+    seen = set()
+    for line in lines:
+        key = tuple(part.strip() for part in str(line).split(","))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(str(line).strip())
+        if len(out) >= top_k:
+            break
+    return out
+
+
+def _qa_answer_or_fail(answer, *, allow_blank: bool, query_id, rank: int) -> str:
+    """Refuse to publish a blank QA answer outside explicit diagnostic mode."""
+    value = str(answer or "").strip()
+    if not value and not allow_blank:
+        raise RuntimeError(
+            f"blank QA answer for query_id={query_id} rank={rank}; "
+            "use --allow-blank-qa only for an explicit diagnostic run"
+        )
+    return value
+
+
 def _query_type(query):
     raw = str(query.get("query_type", query.get("type", "KIS"))).upper()
     return {"Q&A": "QA", "VQA": "QA", "TEXTUAL_KIS": "KIS"}.get(raw, raw)
@@ -229,6 +255,11 @@ def main():
 
                     if not final_answer and args.allow_given_answer:
                         final_answer = q.get("answer", "")
+
+                    final_answer = _qa_answer_or_fail(
+                        final_answer, allow_blank=args.allow_blank_qa,
+                        query_id=qid, rank=1,
+                    )
                         
                     lines.append(f"{v}, {f}, {final_answer}")
 
@@ -263,6 +294,8 @@ def main():
                     lines = gen_trake_v3(retriever, search_q, events, templates=templates)
             else:
                 lines = []
+
+            lines = _dedupe_lines(lines, args.top_k)
 
             for rank, line in enumerate(lines, 1):
                 fout.write(json.dumps({"query_id": qid, "rank": rank, "answer": line}) + "\n")

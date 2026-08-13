@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import argparse
+import re
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -17,6 +18,17 @@ from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
 ROOT = Path(os.environ.get("AIC_ROOT", str(Path(__file__).resolve().parents[1])))
 KEYFRAMES_BASE = ROOT / "extracted"
+
+
+def clean_vlm_answer(value: str) -> str:
+    """Keep one concise answer line and remove common generation wrappers."""
+    answer = str(value or "").strip()
+    answer = answer.splitlines()[0].strip() if answer else ""
+    answer = re.sub(
+        r"^(?:Trả lời|Đáp án|Kết quả|Answer|答案)\s*[:：\-]\s*",
+        "", answer, flags=re.IGNORECASE,
+    )
+    return answer.strip().strip('"“”\'')
 
 
 class VLMAnswerer:
@@ -43,15 +55,20 @@ class VLMAnswerer:
             "role": "user",
             "content": [
                 {"type": "image", "image": img},
-                {"type": "text", "text": f"Trả lời ngắn gọn bằng tiếng Việt hoặc tiếng Anh: {question}"},
+                {"type": "text", "text": (
+                    "Trả lời thật ngắn gọn bằng tiếng Việt hoặc tiếng Anh. "
+                    "Nếu câu hỏi hỏi số lượng, chỉ trả về số hoặc số bằng chữ. "
+                    "Không giải thích, không thêm tiền tố.\n"
+                    f"Câu hỏi: {question}"
+                )},
             ],
         }]
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.processor(text=[text], images=[img], return_tensors="pt").to(self.device)
         out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
         gen = out[0][inputs.input_ids.shape[1]:]
-        ans = self.processor.decode(gen, skip_special_tokens=True).strip()
-        return ans
+        ans = self.processor.decode(gen, skip_special_tokens=True)
+        return clean_vlm_answer(ans)
         
     @torch.no_grad()
     def answer_multi(self, image_paths, question, max_new_tokens=64):
@@ -76,8 +93,8 @@ class VLMAnswerer:
         out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
         
         gen = out[0][inputs.input_ids.shape[1]:]
-        ans = self.processor.decode(gen, skip_special_tokens=True).strip()
-        return ans
+        ans = self.processor.decode(gen, skip_special_tokens=True)
+        return clean_vlm_answer(ans)
 
 
 def keyframe_path(video_id, frame_idx):
