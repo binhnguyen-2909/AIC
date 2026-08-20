@@ -77,8 +77,11 @@ python solution/submission_ens.py \
   --use-ensemble
 ```
 
-For Vietnamese-to-English visual expansion, add `--translate` when the
-Qwen3-8B checkpoint is available. For QA, add `--use-vlm`; this requires the
+For Vietnamese-to-English visual expansion, add `--translate` only as an
+optional experiment when the Qwen3-8B checkpoint is available. The bounded
+CPU probe did not produce output in about 210 seconds and GPU1 does not have
+safe shared headroom for this checkpoint, so this channel is not part of the
+verified default route. For QA, add `--use-vlm`; this requires the
 Qwen2.5-VL-3B checkpoint and the keyframe images:
 
 ```bash

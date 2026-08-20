@@ -22,6 +22,7 @@ checkout, so the `>0.90` gate remains `BLOCKED`.
 | QA output integrity | regression test; VLM mode emits only answered rows | `SMOKE` | output is capped by `--qa-frames`; diagnostic blank rows remain explicit; no accuracy claim |
 | QA temporal A/B + candidate pool | private leak-free manual fixture; `1/3` frames and pool `50/100` | `PROXY` | both temporal variants QA `.000`; pool expansion did not recover the two GT videos; no promotion |
 | QA English CLIP + diversity control | private leak-free manual fixture; manual English prompt, `clip_per_vid 5/1` | `PROXY` | one query improved early frame rank, one remained unretrieved; keep as future hypothesis, not default |
+| Qwen3-8B English translator | bounded CPU probe; two Vietnamese queries | `SMOKE` | weights loaded from cache, but no translation output within ~210 s; inconclusive, not promoted |
 
 The H1/H2/H3 fixture is intentionally too small for a stable estimate or a
 meaningful bootstrap interval. Detailed local commands and result hashes
