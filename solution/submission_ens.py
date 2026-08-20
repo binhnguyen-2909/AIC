@@ -59,6 +59,18 @@ def _query_type(query):
     return {"Q&A": "QA", "VQA": "QA", "TEXTUAL_KIS": "KIS"}.get(raw, raw)
 
 
+def _qa_rows_to_emit(results, *, vlm_available: bool, limit: int):
+    """Emit only rows with generated answers in production VLM mode.
+
+    Diagnostic runs without a VLM may retain all retrieval rows (and explicit
+    blank answers).  A real submission must not publish rows that were never
+    answered, because blank QA rows are invalid under the submission contract.
+    """
+    if not vlm_available:
+        return list(results)
+    return list(results[:max(1, int(limit))])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--queries", required=True)
@@ -68,7 +80,7 @@ def main():
     ap.add_argument("--translate", action="store_true")
     ap.add_argument("--use-vlm", action="store_true")
     ap.add_argument("--qa-frames", type=int, default=20,
-                    help="number of candidate rows to answer with VLM (default: 20)")
+                    help="number of QA candidate rows to emit and answer (default: 20)")
     ap.add_argument("--qa-context-frames", type=int, default=1,
                     help="chronological keyframes per QA VLM call; 1 keeps single-frame default")
     ap.add_argument("--allow-given-answer", action="store_true",
@@ -215,9 +227,12 @@ def main():
 
             elif qt == "QA":
                 lines = []
-                for row_idx, (v, f, _score) in enumerate(results):
+                qa_results = _qa_rows_to_emit(
+                    results, vlm_available=vlm is not None, limit=args.qa_frames
+                )
+                for row_idx, (v, f, _score) in enumerate(qa_results):
                     answer = ""
-                    if vlm is not None and row_idx < args.qa_frames and keyframe_path:
+                    if vlm is not None and keyframe_path:
                         context = []
                         if args.qa_context_frames > 1 and keyframe_paths:
                             context = keyframe_paths(

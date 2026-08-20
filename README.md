@@ -103,7 +103,9 @@ Production QA refuses to publish blank answers. Use `--allow-blank-qa` only
 for an explicit smoke/diagnostic run. Exact duplicate candidates are removed
 before ranks are written. To opt into bounded temporal evidence for QA, add
 `--qa-context-frames 3` (or another small value); the default `1` is retained
-until scorer/ground-truth A/B evidence is available.
+until scorer/ground-truth A/B evidence is available. With `--use-vlm`, at most
+`--qa-frames` QA rows are emitted so every production row has a generated
+answer; blank rows are retained only in explicit diagnostic mode.
 
 Use `--device cpu` only for smoke tests. On a shared GPU, leave SigLIP2
 disabled unless it has been benchmarked on the target query distribution.
