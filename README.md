@@ -88,6 +88,17 @@ python solution/submission_ens.py \
   --use-ensemble --translate --use-vlm
 ```
 
+The current organizer submission guide requires one CSV per query and a ZIP
+containing a `submission/` directory. See
+[`docs/AIC26_OFFICIAL_UPDATE_20260820.md`](docs/AIC26_OFFICIAL_UPDATE_20260820.md)
+and package results with:
+
+```bash
+python solution/package_submission.py \
+  --input-dir /path/to/csv_results \
+  --out /path/to/submission.zip
+```
+
 Production QA refuses to publish blank answers. Use `--allow-blank-qa` only
 for an explicit smoke/diagnostic run. Exact duplicate candidates are removed
 before ranks are written.
