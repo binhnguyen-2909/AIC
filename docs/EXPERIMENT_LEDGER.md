@@ -24,6 +24,7 @@ checkout, so the `>0.90` gate remains `BLOCKED`.
 | QA English CLIP + diversity control | private leak-free manual fixture; manual English prompt, `clip_per_vid 5/1` | `PROXY` | one query improved early frame rank, one remained unretrieved; keep as future hypothesis, not default |
 | Qwen3-8B English translator | bounded CPU probe; two Vietnamese queries | `SMOKE` | weights loaded from cache, but no translation output within ~210 s; inconclusive, not promoted |
 | RRF text-channel fusion | same private leak-free fixture and top-100 budget | `PROXY` | FinalScore `.000` versus min-max `.020`; reject, min-max remains the production default |
+| TRAKE event-wise candidate union | same private leak-free fixture; M010 candidate top-50 diagnostic | `PROXY` | target video absent from aggregate and all three event-wise lists; reject before end-to-end, no production change |
 
 The H1/H2/H3 fixture is intentionally too small for a stable estimate or a
 meaningful bootstrap interval. Detailed local commands and result hashes
