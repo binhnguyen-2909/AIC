@@ -2,9 +2,9 @@
 
 Reviewed `2026-08-20`. This is a transfer map, not a claim that any paper's
 score transfers to AIC26. The [official AIC homepage](https://aichallenge.hochiminhcity.gov.vn/)
-describes multimedia retrieval and a planned automatic format, but the
-inspected public page does not expose an official query/ground-truth/scorer
-package.
+describes multimedia retrieval, a planned automatic format, and encourages
+LVLM/GenAI integration, but the inspected public page does not expose an
+official query/ground-truth/scorer package.
 
 | Paper/system | Relevant evidence | Transferable component | Experiment direction | Risk |
 |---|---|---|---|---|

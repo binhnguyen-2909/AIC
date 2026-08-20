@@ -24,7 +24,8 @@ organizer scorer. `eval_official.py` is therefore only an official-style
 compatibility evaluator and must not be used to claim competition accuracy.
 
 Kiểm tra lại website chính thức ngày 2026-08-20: trang chủ mô tả AI Challenge
-2026 là trợ lý truy xuất multimedia và nói sẽ thử nghiệm cả hình thức tự động,
+2026 là trợ lý truy xuất multimedia, nói sẽ thử nghiệm cả hình thức tự động và
+khuyến khích LVLM/GenAI,
 nhưng chỉ công bố lịch dự kiến và chưa công bố query/GT/scorer của vòng tự động
 ([trang chính thức](https://aichallenge.hochiminhcity.gov.vn/)). Trang hướng
 dẫn công khai hiện vẫn là tài liệu AI Challenge 2022, nên không được dùng làm
