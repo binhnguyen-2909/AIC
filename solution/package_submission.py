@@ -140,6 +140,10 @@ def package(input_dir: Path, output: Path, *, force: bool = False) -> dict[str, 
     files = _csv_files(input_dir)
     manifest = [_validate_csv(path) for path in files]
     output = output.expanduser().resolve()
+    if output.suffix.lower() != ".zip":
+        raise SubmissionFormatError(
+            f"output archive must use the .zip suffix: {output.name}"
+        )
     if output.exists() and not force:
         raise SubmissionFormatError(f"output already exists (use --force): {output}")
     output.parent.mkdir(parents=True, exist_ok=True)

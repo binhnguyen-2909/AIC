@@ -47,6 +47,17 @@ class PackageSubmissionTest(unittest.TestCase):
             with self.assertRaises(SubmissionFormatError):
                 package(input_dir, root / "long-answer.zip")
 
+    def test_requires_zip_output_suffix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_dir = root / "csv_results"
+            input_dir.mkdir()
+            (input_dir / "query-1-kis.csv").write_text(
+                "L01_V001, 1\n", encoding="utf-8"
+            )
+            with self.assertRaises(SubmissionFormatError):
+                package(input_dir, root / "submission.archive")
+
 
 if __name__ == "__main__":
     unittest.main()
