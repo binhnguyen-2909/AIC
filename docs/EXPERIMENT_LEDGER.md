@@ -20,6 +20,7 @@ checkout, so the `>0.90` gate remains `BLOCKED`.
 | QA retrieve → VLM | schema/answer guard | `SMOKE` | blank answer fail-closed; semantic accuracy not measured |
 | QA bounded temporal context | mapping/unit test; `--qa-context-frames N` | `SMOKE` | chronological window is bounded; default `1`; semantic accuracy not measured |
 | QA output integrity | regression test; VLM mode emits only answered rows | `SMOKE` | output is capped by `--qa-frames`; diagnostic blank rows remain explicit; no accuracy claim |
+| QA temporal A/B + candidate pool | private leak-free manual fixture; `1/3` frames and pool `50/100` | `PROXY` | both temporal variants QA `.000`; pool expansion did not recover the two GT videos; no promotion |
 
 The H1/H2/H3 fixture is intentionally too small for a stable estimate or a
 meaningful bootstrap interval. Detailed local commands and result hashes
