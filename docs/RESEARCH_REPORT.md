@@ -1,5 +1,16 @@
 # AIC 2026 — research and validation report
 
+## Evidence status (reviewed 2026-08-20)
+
+The official gate is **BLOCKED**, not a claimed `>90%`: this public checkout
+contains no organizer query/ground-truth/scorer bundle. Any metadata-derived
+proxy is quarantined because the same metadata can appear in the retrieval
+index. The reproducible public evidence is therefore limited to code/schema
+smoke tests and the documented local experiment summaries.
+
+The updated CSV/ZIP upload contract is recorded in
+[`AIC26_OFFICIAL_UPDATE_20260820.md`](AIC26_OFFICIAL_UPDATE_20260820.md).
+
 ## Kết luận ngắn
 
 Chưa có cơ sở trung thực để cam kết accuracy trên 90% cho đề thật: workspace
@@ -7,15 +18,12 @@ không chứa query/ground-truth chính thức, còn benchmark hiện tại ch�
 video metadata làm pseudo-label và bỏ qua frame interval, QA answer và TRAKE
 partial R-Score.
 
-Đề bài local đã được đọc tại
-[`đề bài/AIC2026_vòng_sơ_tuyển.md`](../đề%20bài/AIC2026_vòng_sơ_tuyển.md): KIS
-và QA cần đúng video + frame trong đoạn GT; TRAKE cần đúng video và từng
-event; FinalScore là trung bình `R@1,R@5,R@20,R@50,R@100`. Audit cả 32 archive
-chỉ thấy MP4/JPG/NPY/CSV/JSON dữ liệu, không có query, GT hay evaluator của ban
-tổ chức. Vì vậy `eval_official.py` chỉ là evaluator tương thích do workspace
-tự xây, chưa thể dùng để tuyên bố điểm thi.
+The data-bearing local checkout has a separate statement/data audit; this
+public checkout intentionally contains no videos, indexes, query, GT, or
+organizer scorer. `eval_official.py` is therefore only an official-style
+compatibility evaluator and must not be used to claim competition accuracy.
 
-Kiểm tra lại website chính thức ngày 2026-08-07: trang chủ mô tả AI Challenge
+Kiểm tra lại website chính thức ngày 2026-08-20: trang chủ mô tả AI Challenge
 2026 là trợ lý truy xuất multimedia và nói sẽ thử nghiệm cả hình thức tự động,
 nhưng chỉ công bố lịch dự kiến và chưa công bố query/GT/scorer của vòng tự động
 ([trang chính thức](https://aichallenge.hochiminhcity.gov.vn/)). Trang hướng
@@ -32,11 +40,11 @@ ground truth cho AIC2026.
 | visual-only SigLIP2, isolated 8-frame/video test | 0.045 | 0.085 | 0.260 | 0.420 | 0.545 | **0.271** |
 | visual-only SigLIP2, full 177,321-keyframe test | 0.070 | 0.140 | 0.260 | 0.375 | 0.480 | **0.265** |
 
-Sau khi đổi ensemble sang round-robin frame/video, benchmark proxy 200 query
-cho `EnsembleRetriever` (không có ASR/OCR, không bật CLIP rerank) đạt title
-FinalScore `0.991` và description `0.635`. Đây vẫn là metadata video-level
-pseudo-GT, nhưng xác nhận thay đổi không làm giảm baseline và phủ top-100
-video hiệu quả hơn.
+Các benchmark title/description ở trên vẫn là metadata video-level pseudo-GT
+và phải giữ nhãn `PROXY`/`QUARANTINED_LEAKAGE`; chúng không xác nhận accuracy.
+H1/H2/H3 trên manual fixture leak-free được ghi riêng trong
+[`EXPERIMENT_LEDGER.md`](EXPERIMENT_LEDGER.md), nhưng chỉ có 10 query và
+không có scorer parity.
 
 Title score cao không đại diện cho visual retrieval: query được lấy trực tiếp
 từ title và title cũng nằm trong BM25 documents. Không nên dùng con số này để
@@ -79,26 +87,19 @@ encoder chưa có benchmark tiếng Việt để suy diễn accuracy.
 
 ## ASR branch đã triển khai thử
 
-873 MP4 đều có audio AAC nhưng workspace không có subtitle/transcript/OCR/caption
-artifact. Đã thêm [asr_index.py](./asr_index.py): PhoWhisper đọc audio qua
+Trong checkout public, dữ liệu không được commit. Code có [asr_index.py](../solution/asr_index.py): PhoWhisper đọc audio qua
 ffmpeg, lưu đoạn có timestamp, gom thành cửa sổ khoảng 15 giây, rồi search
 BM25 và ánh xạ timestamp về `frame_idx` qua CSV. `EnsembleRetriever` ưu tiên
 `ensemble_index/asr_full.jsonl` và fallback về `asr_index.jsonl` cho checkout cũ.
 
-Đã hoàn tất ASR full corpus với PhoWhisper-tiny: 873/873 video, 16,057 chunks,
-không còn timestamp null trong artifact merged. Batch1024 đã được thử thực tế
-nhưng máy đang có job khác giữ khoảng 34--49 GB mỗi GPU: GPU1 tăng lên khoảng
-79/80 GB trước video đầu tiên, nên dừng trước OOM; cấu hình an toàn batch64 đã
-được dùng cho các shard còn lại. Với long-form
+Các artifact full-corpus được tạo trong checkout data-bearing, không được đưa
+vào public. Batch1024 đã thử nhưng chạm sát VRAM trên máy chia sẻ; batch64 là
+cấu hình an toàn hơn. Với long-form
 `ChunkPipeline`, Transformers tự giới hạn `num_workers` về 1 để tránh lỗi dù
 được truyền `--workers 8`; đây là giới hạn của pipeline, không phải bỏ sót
 tham số.
 
-OCR full corpus cũng đã hoàn tất với EasyOCR: 873/873 video và 52,930 text
-frames trong artifact merged; 871 video có ít nhất một text frame, 2 video
-không phát hiện chữ. Các shard full-frame được giữ cho phần đã hoàn tất; các
-shard resume dùng sample16, với một phần nhỏ đã chạy sample64 trước khi tối
-ưu lịch GPU để phủ đủ video trong giới hạn VRAM. `EnsembleRetriever` ưu tiên
+OCR cũng là một nhánh tùy chọn; `EnsembleRetriever` ưu tiên
 `ensemble_index/ocr_full.jsonl` và fallback
 về `ocr_index.jsonl`; các JSONL runtime này không được commit lên GitHub.
 Đã tối ưu script sang `readtext_batched()` và kiểm tra runtime trên 2 ảnh
@@ -110,8 +111,8 @@ Smoke test trên một video có lời thoại cho transcript tiếng Việt có
 vào artifact isolated `experiments/siglip_temporal/artifacts/`; kết quả không
 sửa index production.
 
-Qwen2.5-VL-3B đã được gọi qua pipeline QA nhưng smoke test hiện gặp CUDA OOM
-do cả hai A100 đang bị các process khác chiếm gần hết bộ nhớ. `submission_ens.py`
+Qwen2.5-VL-3B được gọi qua pipeline QA nhưng cần GPU có headroom an toàn.
+`submission_ens.py`
 đã được làm cho graceful: bỏ CLIP phụ khi bật VLM và tiếp tục KIS/TRAKE nếu
 VLM không nạp được; muốn chấm QA thật cần chạy trên GPU trống.
 
@@ -132,6 +133,11 @@ Paper báo cáo 79.6/88 trên preliminary AIC'25, tương đương khoảng 90.5
 họ, nhưng không phải ground truth của AIC2026 nên chưa thể chuyển thành cam
 kết cho bộ test hiện tại. Đây là hướng ưu tiên số 1 nếu có GPU/thời gian để
 caption/ASR toàn bộ 873 video.
+
+Nguồn sơ cấp đã kiểm chứng và bản đồ transferability chi tiết nằm trong
+[`PAPER_MAP.md`](PAPER_MAP.md). MERVIN và Vortex báo cáo kết quả trên AIC HCMC
+2025; DANTE mô tả dynamic programming cho TRAKE. Không bài nào cung cấp bằng
+chứng scorer-parity trên AIC26.
 
 Khảo sát thêm SOICT 2025 cho thấy các nhóm đạt điểm cao khác cũng dùng cùng
 pattern: TARS tách query thành sub-event rồi monotonic DP/K-pointer (báo cáo

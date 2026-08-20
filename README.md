@@ -173,6 +173,8 @@ Run the other shard indices concurrently, then merge atomically with
 
 - `docs/RESEARCH_REPORT.md`: papers, official-data audit, benchmarks, and
   limitations.
+- `docs/PAPER_MAP.md`: primary paper sources and transferability decisions.
+- `docs/EXPERIMENT_LEDGER.md`: evidence labels and A/B/proxy decisions.
 - `docs/IMPROVEMENT_PLAN.md`: next experiments and failure modes.
 - `solution/ensemble.py`: production fusion and TRAKE alignment.
 - `solution/submission_ens.py`: single entry point for all query types.
