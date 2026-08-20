@@ -18,6 +18,7 @@ checkout, so the `>0.90` gate remains `BLOCKED`.
 | Full SigLIP2 visual channel | separate 177,321-frame local proxy | `PROXY` | FinalScore `.265`; keep opt-in, not default |
 | TRAKE monotonic DP | synthetic ordered events | `SMOKE` | 4/4 events in range; correctness only |
 | QA retrieve → VLM | schema/answer guard | `SMOKE` | blank answer fail-closed; semantic accuracy not measured |
+| QA bounded temporal context | mapping/unit test; `--qa-context-frames N` | `SMOKE` | chronological window is bounded; default `1`; semantic accuracy not measured |
 
 The H1/H2/H3 fixture is intentionally too small for a stable estimate or a
 meaningful bootstrap interval. Detailed local commands and result hashes

@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import argparse
+import csv
 import re
 from pathlib import Path
 
@@ -18,6 +19,9 @@ from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
 ROOT = Path(os.environ.get("AIC_ROOT", str(Path(__file__).resolve().parents[1])))
 KEYFRAMES_BASE = ROOT / "extracted"
+MODEL_CACHE = os.environ.get(
+    "AIC_MODEL_CACHE", str(Path.home() / ".cache" / "huggingface" / "hub")
+)
 
 
 def clean_vlm_answer(value: str) -> str:
@@ -33,24 +37,23 @@ def clean_vlm_answer(value: str) -> str:
 
 class VLMAnswerer:
     def __init__(self, device="cuda"):
-        print("[vlm] loading Qwen2.5-VL-3B-Instruct for multi-frame...")
+        print("[vlm] loading Qwen2.5-VL-3B-Instruct...")
         self.processor = AutoProcessor.from_pretrained(
             "Qwen/Qwen2.5-VL-3B-Instruct",
-            # Cap resolution to prevent OOM when passing sequences
-            min_pixels=256 * 28 * 28,  
-            max_pixels=1280 * 28 * 28, 
+            cache_dir=MODEL_CACHE,
         )
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2.5-VL-3B-Instruct",
             torch_dtype=torch.bfloat16,
             device_map=device,
+            cache_dir=MODEL_CACHE,
         ).eval()
         self.device = device
 
     @torch.no_grad()
     def answer(self, image_path, question, max_new_tokens=64):
-        # Keep original single-image method for backwards compatibility
-        img = Image.open(image_path).convert("RGB")
+        with Image.open(image_path) as source:
+            img = source.convert("RGB").copy()
         messages = [{
             "role": "user",
             "content": [
@@ -69,63 +72,108 @@ class VLMAnswerer:
         gen = out[0][inputs.input_ids.shape[1]:]
         ans = self.processor.decode(gen, skip_special_tokens=True)
         return clean_vlm_answer(ans)
-        
+
     @torch.no_grad()
     def answer_multi(self, image_paths, question, max_new_tokens=64):
-        """Processes multiple chronological frames as a single video sequence."""
-        images = [Image.open(p).convert("RGB") for p in image_paths if p is not None]
-        if not images:
+        """Answer from a bounded chronological keyframe neighborhood.
+
+        This is opt-in because the competition scorer/answer semantics are not
+        available locally.  A single path delegates to ``answer`` so the
+        default route remains identical to the single-frame path.
+        """
+        paths = [Path(path) for path in image_paths if path]
+        if not paths:
             return ""
+        if len(paths) == 1:
+            return self.answer(str(paths[0]), question, max_new_tokens)
 
-        content = []
-        for img in images:
-            content.append({"type": "image", "image": img})
-            
+        images = []
+        for path in paths:
+            with Image.open(path) as source:
+                images.append(source.convert("RGB").copy())
+        content = [{"type": "image", "image": image} for image in images]
         content.append({
-            "type": "text", 
-            "text": f"Những hình ảnh này là các khung hình liên tiếp từ một video. Trả lời ngắn gọn dựa trên toàn bộ chuỗi hình ảnh: {question}"
+            "type": "text",
+            "text": (
+                "Đây là các keyframe liên tiếp theo thứ tự thời gian của cùng một video. "
+                "Trả lời thật ngắn gọn bằng tiếng Việt hoặc tiếng Anh. "
+                "Nếu câu hỏi hỏi số lượng, chỉ trả về số hoặc số bằng chữ. "
+                "Không giải thích, không thêm tiền tố.\n"
+                f"Câu hỏi: {question}"
+            ),
         })
-
         messages = [{"role": "user", "content": content}]
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        
-        inputs = self.processor(text=[text], images=images, return_tensors="pt").to(self.device)
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = self.processor(
+            text=[text], images=images, return_tensors="pt"
+        ).to(self.device)
         out = self.model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
-        
         gen = out[0][inputs.input_ids.shape[1]:]
         ans = self.processor.decode(gen, skip_special_tokens=True)
         return clean_vlm_answer(ans)
 
 
-def keyframe_path(video_id, frame_idx):
-    """Resolve to actual JPG path."""
-    # parse video_id like L21_V001 -> batch L21
-    parts = video_id.split("_")
-    batch = parts[0]  # L21
-    vid_short = parts[1]  # V001
-    # frame_idx is original index from map-keyframes; keyframe filename is the n-th keyframe
-    # we need the mapping from frame_idx to keyframe n-th
-    map_csv = ROOT / "extracted" / "map-keyframes-aic25-b1" / "map-keyframes" / f"{video_id}.csv"
+def _keyframe_rows(video_id):
+    """Read ``(ordinal, source_frame_idx)`` rows in temporal order."""
+    map_csv = (
+        ROOT / "extracted" / "map-keyframes-aic25-b1" / "map-keyframes"
+        / f"{video_id}.csv"
+    )
     if not map_csv.exists():
-        return None
+        return []
     rows = []
-    with open(map_csv) as f:
-        next(f)
-        for line in f:
-            parts = line.strip().split(",")
-            if len(parts) >= 4:
-                rows.append((int(parts[0]), int(parts[3])))  # (n, frame_idx)
-    # find closest keyframe
-    best = min(rows, key=lambda r: abs(r[1] - frame_idx))
-    n = best[0]
-    fname = f"{n:03d}.jpg"
+    with map_csv.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            try:
+                rows.append((int(row["n"]), int(row["frame_idx"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return sorted(rows)
+
+
+def _path_for_ordinal(video_id, ordinal):
+    parts = video_id.split("_", 1)
+    if len(parts) != 2:
+        return None
+    batch = parts[0]
+    fname = f"{int(ordinal):03d}.jpg"
     batch_dirs = [KEYFRAMES_BASE / f"Keyframes_{batch}"]
     batch_dirs.extend(sorted(KEYFRAMES_BASE.glob(f"Keyframes_{batch}_*")))
     for batch_dir in batch_dirs:
-        p = batch_dir / "keyframes" / video_id / fname
-        if p.exists():
-            return p
+        path = batch_dir / "keyframes" / video_id / fname
+        if path.exists():
+            return path
     return None
+
+
+def keyframe_path(video_id, frame_idx):
+    """Resolve the closest organizer keyframe to a source frame index."""
+    rows = _keyframe_rows(video_id)
+    if not rows:
+        return None
+    ordinal, _ = min(rows, key=lambda row: abs(row[1] - int(frame_idx)))
+    return _path_for_ordinal(video_id, ordinal)
+
+
+def keyframe_paths(video_id, frame_idx, max_frames=1):
+    """Resolve a centered, temporally ordered keyframe neighborhood."""
+    rows = _keyframe_rows(video_id)
+    if not rows:
+        return []
+    limit = max(1, int(max_frames))
+    center = min(
+        range(len(rows)), key=lambda index: abs(rows[index][1] - int(frame_idx))
+    )
+    if limit >= len(rows):
+        selected = rows
+    else:
+        start = max(0, min(center - limit // 2, len(rows) - limit))
+        selected = rows[start:start + limit]
+    return [path for ordinal, _ in selected
+            if (path := _path_for_ordinal(video_id, ordinal)) is not None]
 
 
 def main():

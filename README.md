@@ -101,7 +101,9 @@ python solution/package_submission.py \
 
 Production QA refuses to publish blank answers. Use `--allow-blank-qa` only
 for an explicit smoke/diagnostic run. Exact duplicate candidates are removed
-before ranks are written.
+before ranks are written. To opt into bounded temporal evidence for QA, add
+`--qa-context-frames 3` (or another small value); the default `1` is retained
+until scorer/ground-truth A/B evidence is available.
 
 Use `--device cpu` only for smoke tests. On a shared GPU, leave SigLIP2
 disabled unless it has been benchmarked on the target query distribution.
