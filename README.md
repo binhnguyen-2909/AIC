@@ -104,14 +104,20 @@ CUDA_VISIBLE_DEVICES=<owned-free-gpu> python solution/submission_ens.py \
 Convert the internal JSONL into the official CSV-per-query ZIP:
 
 ```bash
-python solution/make_submission.py \
+python solution/snap_submission.py \
   --queries /tmp/aic_queries.jsonl \
   --predictions /path/to/predictions.jsonl \
+  --out /tmp/predictions_keyframes.jsonl
+
+python solution/make_submission.py \
+  --queries /tmp/aic_queries.jsonl \
+  --predictions /tmp/predictions_keyframes.jsonl \
   --out /path/to/submission.zip
 ```
 
-The converter validates IDs, task types, field counts, TRAKE event counts,
-and blank QA answers before creating the archive.
+The snapper maps dense decoded frames back to official keyframe `frame_idx`
+values and removes duplicates. The converter then validates IDs, task types,
+field counts, TRAKE event counts, and blank QA answers before creating the archive.
 
 Run retrieval directly when rebuilding a fresh checkout:
 

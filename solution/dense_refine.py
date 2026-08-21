@@ -1,6 +1,7 @@
 """Query-time dense source-frame refinement around retrieved keyframes."""
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import cv2
@@ -13,6 +14,7 @@ import os
 
 ROOT = Path(os.environ.get("AIC_ROOT", str(Path(__file__).resolve().parents[1])))
 VIDEO_ROOTS = sorted((ROOT / "extracted").glob("Videos_*/video"))
+MAP_ROOT = ROOT / "extracted" / "map-keyframes-aic25-b1" / "map-keyframes"
 
 
 def _unwrap(out):
@@ -29,6 +31,11 @@ def _device_vector(value, device: str) -> torch.Tensor:
     if isinstance(value, torch.Tensor): return value.to(device=device, dtype=torch.float32).reshape(-1)
     return torch.as_tensor(value, device=device, dtype=torch.float32).reshape(-1)
 
+def _nearest_keyframe(frame_id: int, keyframes: list[int]) -> int:
+    """Snap a decoded source frame to the nearest official keyframe ID."""
+    if not keyframes: return int(frame_id)
+    return int(min(keyframes, key=lambda value: abs(int(value) - int(frame_id))))
+
 
 class DenseFrameRefiner:
     """Use the already-loaded CLIP image tower on raw source frames.
@@ -43,6 +50,7 @@ class DenseFrameRefiner:
         self.processor = processor
         self.device = device
         self._paths = {}
+        self._keyframes = {}
 
     def _video_path(self, video_id: str):
         if video_id not in self._paths:
@@ -53,6 +61,17 @@ class DenseFrameRefiner:
                     found.append(path)
             self._paths[video_id] = found[0] if found else None
         return self._paths[video_id]
+
+    def _keyframe_ids(self, video_id: str) -> list[int]:
+        if video_id not in self._keyframes:
+            path = MAP_ROOT / f"{video_id}.csv"; values: list[int] = []
+            if path.exists():
+                with path.open(newline="") as handle:
+                    for row in csv.DictReader(handle):
+                        try: values.append(int(row["frame_idx"]))
+                        except (KeyError, TypeError, ValueError): continue
+            self._keyframes[video_id] = sorted(set(values))
+        return self._keyframes[video_id]
 
     @torch.no_grad()
     def refine(self, video_id: str, center_frame: int, text_embedding,
@@ -94,7 +113,8 @@ class DenseFrameRefiner:
             raise ValueError(f"embedding dimension mismatch: image={image_vector.shape[-1]} text={text_vector.numel()}")
         scores = (image_vector @ text_vector).cpu().numpy()
         order = np.argsort(-scores)[:max(1, int(top_k))]
-        return [(int(frame_ids[int(i)]), float(scores[int(i)])) for i in order]
+        keyframes = self._keyframe_ids(video_id)
+        return [(_nearest_keyframe(int(frame_ids[int(i)]), keyframes), float(scores[int(i)])) for i in order]
     
 def get_contiguous_keyframes(video_id: str, center_frame: int, window: int = 2):
     """Retrieves paths for the center keyframe and its adjacent temporal neighbors."""
