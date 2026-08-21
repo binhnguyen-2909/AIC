@@ -68,7 +68,48 @@ These commands write only local runtime artifacts under
 `solution/index/` and `solution/ensemble_index/`; those paths are ignored by
 Git.
 
-Run retrieval:
+## Competition-night run
+
+The public checkout intentionally has no dataset, index, or model weights.
+Those must be placed in the local checkout once; after that, do not rebuild
+anything during the contest. The private prepared workspace uses the cached
+environment and artifacts, and can be checked without loading a model:
+
+```bash
+python solution/preflight.py \
+  --require-data --require-vlm --queries /path/to/queries.jsonl
+```
+
+Run retrieval with the ensemble. Omit `--use-vlm` for KIS/TRAKE-only input;
+add it for a mixed file containing QA after confirming the selected GPU is
+owned and has enough free VRAM. `--translate` is optional and is not part of
+the verified default route.
+
+```bash
+# KIS/TRAKE, or a file with no QA rows
+CUDA_VISIBLE_DEVICES=<owned-free-gpu> python solution/submission_ens.py \
+  --queries /path/to/queries.jsonl \
+  --out /path/to/predictions.jsonl --use-ensemble --top-k 100
+
+# Mixed KIS/QA/TRAKE: use this instead when QA rows are present
+CUDA_VISIBLE_DEVICES=<owned-free-gpu> python solution/submission_ens.py \
+  --queries /path/to/queries.jsonl \
+  --out /path/to/predictions.jsonl --use-ensemble --use-vlm --top-k 100
+```
+
+Convert the internal JSONL into the official CSV-per-query ZIP:
+
+```bash
+python solution/make_submission.py \
+  --queries /path/to/queries.jsonl \
+  --predictions /path/to/predictions.jsonl \
+  --out /path/to/submission.zip
+```
+
+The converter validates IDs, task types, field counts, TRAKE event counts,
+and blank QA answers before creating the archive.
+
+Run retrieval directly when rebuilding a fresh checkout:
 
 ```bash
 python solution/submission_ens.py \
