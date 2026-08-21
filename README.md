@@ -76,8 +76,12 @@ anything during the contest. The private prepared workspace uses the cached
 environment and artifacts, and can be checked without loading a model:
 
 ```bash
+python solution/prepare_queries.py \
+  --input /path/to/SOTUYEN1-bo-de-thi.zip \
+  --out /tmp/aic_queries.jsonl
+
 python solution/preflight.py \
-  --require-data --require-vlm --queries /path/to/queries.jsonl
+  --require-data --require-vlm --queries /tmp/aic_queries.jsonl
 ```
 
 Run retrieval with the ensemble. Omit `--use-vlm` for KIS/TRAKE-only input;
@@ -88,12 +92,12 @@ the verified default route.
 ```bash
 # KIS/TRAKE, or a file with no QA rows
 CUDA_VISIBLE_DEVICES=<owned-free-gpu> python solution/submission_ens.py \
-  --queries /path/to/queries.jsonl \
+  --queries /tmp/aic_queries.jsonl \
   --out /path/to/predictions.jsonl --use-ensemble --top-k 100
 
 # Mixed KIS/QA/TRAKE: use this instead when QA rows are present
 CUDA_VISIBLE_DEVICES=<owned-free-gpu> python solution/submission_ens.py \
-  --queries /path/to/queries.jsonl \
+  --queries /tmp/aic_queries.jsonl \
   --out /path/to/predictions.jsonl --use-ensemble --use-vlm --top-k 100
 ```
 
@@ -101,7 +105,7 @@ Convert the internal JSONL into the official CSV-per-query ZIP:
 
 ```bash
 python solution/make_submission.py \
-  --queries /path/to/queries.jsonl \
+  --queries /tmp/aic_queries.jsonl \
   --predictions /path/to/predictions.jsonl \
   --out /path/to/submission.zip
 ```
