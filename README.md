@@ -119,6 +119,26 @@ The snapper maps dense decoded frames back to official keyframe `frame_idx`
 values and removes duplicates. The converter then validates IDs, task types,
 field counts, TRAKE event counts, and blank QA answers before creating the archive.
 
+### BTC log repair for `p1-16`
+
+The BTC checker for the current preliminary-round package counts the opening
+context sentence of `p1-16` as an additional TRAKE event. The normal query
+parser intentionally keeps that sentence as context, so use the dedicated
+repair command only for this BTC package:
+
+```bash
+python solution/repair_trake_submission.py \
+  --queries /path/to/runtime_queries_p1.jsonl \
+  --predictions /path/to/p1_predictions_keyframes.jsonl \
+  --map /path/to/extracted/map-keyframes-aic25-b1/map-keyframes/L24_V030.csv \
+  --out /path/to/submission_p1_btc.zip
+```
+
+It replaces only `p1-16`, emits four official map-keyframe IDs per row, and
+leaves the other query outputs unchanged. The current verified anchor is
+`L24_V030, 1997, 6231, 13680, 15200`; do not submit the older three-frame
+`p1-16` archive.
+
 Run retrieval directly when rebuilding a fresh checkout:
 
 ```bash
