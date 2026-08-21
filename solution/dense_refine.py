@@ -24,6 +24,11 @@ def _unwrap(out):
         return out[0]
     return out
 
+def _device_vector(value, device: str) -> torch.Tensor:
+    """Convert a NumPy/CPU/CUDA embedding to one float32 device vector."""
+    if isinstance(value, torch.Tensor): return value.to(device=device, dtype=torch.float32).reshape(-1)
+    return torch.as_tensor(value, device=device, dtype=torch.float32).reshape(-1)
+
 
 class DenseFrameRefiner:
     """Use the already-loaded CLIP image tower on raw source frames.
@@ -83,7 +88,11 @@ class DenseFrameRefiner:
             pixels = pixels.half()
         image_emb = _unwrap(self.model.get_image_features(pixel_values=pixels))
         image_emb = image_emb / image_emb.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-        scores = (image_emb.float() @ text_embedding.reshape(-1)).cpu().numpy()
+        text_vector = _device_vector(text_embedding, str(image_emb.device))
+        image_vector = image_emb.float()
+        if text_vector.numel() != image_vector.shape[-1]:
+            raise ValueError(f"embedding dimension mismatch: image={image_vector.shape[-1]} text={text_vector.numel()}")
+        scores = (image_vector @ text_vector).cpu().numpy()
         order = np.argsort(-scores)[:max(1, int(top_k))]
         return [(int(frame_ids[int(i)]), float(scores[int(i)])) for i in order]
     
